@@ -1,5 +1,7 @@
 #!/bin/bash
 
+sudo dnf install mangohud gamescope -y
+
 # Copy scripts to /usr/bin
 sudo cp ./gamescope-session /usr/bin/
 sudo cp ./steamos-session-select /usr/bin/
