@@ -1,3 +1,12 @@
 #!/bin/bash
 
-gamescope --mangoapp -e -- steam -steamdeck -steamos3
+# Default framerate (can be overridden via environment variable) e.g. FRAMERATE=60 ./gamescope-session
+FRAMERATE=${FRAMERATE:-120}
+
+# Allow framerate to be specified as first argument
+if [ $# -gt 0 ] && [[ "$1" =~ ^[0-9]+$ ]]; then
+    FRAMERATE=$1
+    shift
+fi
+
+gamescope -r $FRAMERATE --mangoapp -e -- steam -steamdeck -steamos3
