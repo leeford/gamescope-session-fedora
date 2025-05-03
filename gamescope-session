@@ -9,4 +9,4 @@ if [ $# -gt 0 ] && [[ "$1" =~ ^[0-9]+$ ]]; then
     shift
 fi
 
-MANGOHUD=0 gamescope -r $FRAMERATE --mangoapp -e -- steam -steamdeck -steamos3
+MANGOHUD_CONFIG=no_display gamescope -r $FRAMERATE --mangoapp -e -- steam -steamdeck -steamos3
