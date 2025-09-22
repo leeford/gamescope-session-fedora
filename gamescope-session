@@ -1,12 +1,139 @@
 #!/bin/bash
 
+echo "========================================="
+echo "Gamescope Steam Session Launcher"
+echo "========================================="
+echo "Started at: $(date)"
+echo "Script location: $(realpath "$0")"
+echo "Running as user: $(whoami)"
+echo ""
+
+# Check if Steam is already running
+check_steam_running() {
+    echo "Checking for existing Steam processes..."
+    # Check for steam processes (excluding this script and grep itself)
+    local steam_pids=$(pgrep -f "steam" | grep -v "$$")
+    
+    if [ -n "$steam_pids" ]; then
+        echo "WARNING: Steam is already running with PID(s): $steam_pids"
+        echo "Terminating existing Steam processes..."
+        
+        # First try graceful shutdown
+        echo "   Attempting graceful Steam shutdown..."
+        if command -v steam >/dev/null 2>&1; then
+            steam -shutdown 2>/dev/null || true
+            echo "   Waiting 3 seconds for graceful shutdown..."
+            sleep 3
+        else
+            echo "   Steam command not found, skipping graceful shutdown"
+        fi
+        
+        # Kill any remaining steam processes
+        echo "   Killing remaining Steam processes..."
+        pkill -f "steam" 2>/dev/null || true
+        echo "   Waiting 2 seconds for processes to terminate..."
+        sleep 2
+        
+        # Check if any processes are still running
+        echo "   Checking for remaining Steam processes..."
+        local remaining_pids=$(pgrep -f "steam" | grep -v "$$")
+        if [ -n "$remaining_pids" ]; then
+            echo "   WARNING: Some Steam processes are still running: $remaining_pids"
+            echo "   Attempting force kill (SIGKILL)..."
+            pkill -9 -f "steam" 2>/dev/null || true
+            echo "   Waiting 1 second for force kill to complete..."
+            sleep 1
+            
+            # Final check
+            echo "   Final check for Steam processes..."
+            local final_pids=$(pgrep -f "steam" | grep -v "$$")
+            if [ -n "$final_pids" ]; then
+                echo "   ERROR: Unable to terminate all Steam processes: $final_pids"
+                echo "   You may need to manually terminate them or restart your system."
+                exit 1
+            fi
+        fi
+        
+        echo "   Steam processes terminated successfully."
+    else
+        echo "   No existing Steam processes found."
+    fi
+}
+
+# Run Steam check
+check_steam_running
+
+echo ""
+echo "Setting up gamescope configuration..."
+
 # Default framerate (can be overridden via environment variable) e.g. FRAMERATE=60 ./gamescope-session
 FRAMERATE=${FRAMERATE:-120}
+echo "   Output connector: HDMI-A-1"
+OUTPUT_CONNECTOR=HDMI-A-1
 
-# Allow framerate to be specified as first argument
-if [ $# -gt 0 ] && [[ "$1" =~ ^[0-9]+$ ]]; then
-    FRAMERATE=$1
-    shift
+# HDR toggle (on by default). Can be disabled with HDR=0 or HDR_ENABLED=0, or --no-hdr flag.
+HDR_ENABLED=${HDR_ENABLED:-${HDR:-1}}
+echo "   Default framerate: ${FRAMERATE}Hz"
+echo "   HDR default: $([ "$HDR_ENABLED" = "1" ] && echo "enabled" || echo "disabled")"
+
+# Parse optional CLI flags: numeric framerate, --hdr/--no-hdr
+echo ""
+echo "Processing command line arguments..."
+if [ $# -eq 0 ]; then
+    echo "   No command line arguments provided, using defaults."
+else
+    echo "   Arguments provided: $@"
 fi
 
-MANGOHUD_CONFIG=no_display gamescope -r $FRAMERATE --mangoapp -e -- steam -steamdeck -steamos3
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --hdr|--hdr-enabled)
+            echo "   HDR enabled via command line"
+            HDR_ENABLED=1
+            shift
+            ;;
+        --no-hdr)
+            echo "   HDR disabled via command line"
+            HDR_ENABLED=0
+            shift
+            ;;
+        # Numeric framerate (e.g., 60, 90, 120)
+        ''|*[!0-9]*)
+            # Stop on first non-option token to avoid swallowing app args if added later
+            break
+            ;;
+        *)
+            echo "   Framerate set to: $1 Hz"
+            FRAMERATE="$1"
+            shift
+            ;;
+    esac
+done
+
+# Build optional HDR flag for gamescope
+echo ""
+echo "Building gamescope command..."
+HDR_FLAG=""
+if [[ "$HDR_ENABLED" == "1" || "$HDR_ENABLED" == "true" || "$HDR_ENABLED" == "yes" ]]; then
+    HDR_FLAG="--hdr-enabled"
+    echo "   HDR flag added: --hdr-enabled"
+else
+    echo "   HDR disabled, no HDR flag added"
+fi
+
+echo ""
+echo "Final Configuration Summary:"
+echo "   Output Connector: ${OUTPUT_CONNECTOR}"
+echo "   Framerate: ${FRAMERATE}Hz"
+echo "   HDR: $([ -n "$HDR_FLAG" ] && echo "enabled" || echo "disabled")"
+echo "   MangoHUD: enabled"
+echo "   Steam Mode: SteamDeck + SteamOS3"
+
+echo ""
+echo "Launching gamescope session..."
+echo "Full command:"
+echo "   gamescope -O \"$OUTPUT_CONNECTOR\" -r \"$FRAMERATE\" $HDR_FLAG --mangoapp -e -- steam -steamdeck -steamos3"
+echo ""
+echo "========================================="
+
+gamescope -O "$OUTPUT_CONNECTOR" -r "$FRAMERATE" $HDR_FLAG --mangoapp -e -- steam -steamdeck -steamos3
